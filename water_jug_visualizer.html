@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BFS/DFS Water Jug Solver (7L, 5L, 3L)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tải thư viện Vis.js cho việc vẽ đồ thị mạng -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .state-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            margin: 2px 2px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            line-height: 1.5; /* Cải thiện khoảng cách giữa các thẻ */
+        }
+        .open-tag {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 1px solid #34d399;
+        }
+        .closed-tag {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #f87171;
+        }
+        .current-tag {
+            background-color: #bfdbfe;
+            color: #1e40af;
+            border: 2px solid #3b82f6;
+            transform: scale(1.02);
+            transition: transform 0.2s ease;
+        }
+        .goal-tag {
+            background-color: #fef08a;
+            color: #b45309;
+            border: 3px solid #f59e0b;
+        }
+        /* Style cho cây trạng thái */
+        #network-visualization {
+            width: 100%;
+            height: 650px; /* Chiều cao cố định cho đồ thị */
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #ffffff;
+        }
+
+        /* Style cho bảng duyệt */
+        #trace-table th, #trace-table td {
+            padding: 8px 12px;
+            border: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+        #trace-table th {
+            background-color: #f3f4f6;
+            text-align: left;
+            font-weight: 600;
+        }
+        #trace-table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 0.9rem;
+        }
+        
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto bg-white shadow-xl rounded-xl p-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4 border-b pb-2">
+            Bài Toán Đong Dầu (7L, 5L, 3L) - Trực quan hóa BFS/DFS
+        </h1>
+        <p class="text-gray-600 mb-4">Mô phỏng từng bước duyệt với cây trạng thái và bảng theo dõi.</p>
+
+        <!-- Dynamic Configuration Inputs -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border rounded-lg bg-gray-50">
+            <!-- Start State Inputs -->
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Trạng thái Ban đầu (x, y, z)</label>
+                <div class="flex space-x-2">
+                    <input type="number" id="start-x" value="7" min="0" max="7" class="w-1/3 p-2 border rounded text-center" onchange="initializeBFS()" title="Bình 7L">
+                    <input type="number" id="start-y" value="0" min="0" max="5" class="w-1/3 p-2 border rounded text-center" onchange="initializeBFS()" title="Bình 5L">
+                    <input type="number" id="start-z" value="0" min="0" max="3" class="w-1/3 p-2 border rounded text-center" onchange="initializeBFS()" title="Bình 3L">
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Lượng dầu ban đầu trong các bình 7L, 5L, 3L.</p>
+            </div>
+            <!-- Goal Amount Input -->
+            <div>
+                <label for="goal-amount" class="block text-sm font-bold text-gray-700 mb-1">Lượng dầu Đích (Lít)</label>
+                <input type="number" id="goal-amount" value="1" min="1" max="7" class="w-full p-2 border rounded text-center" onchange="initializeBFS()" title="Lượng dầu cần đong được (từ 1 đến 7)">
+                <p class="text-xs text-gray-500 mt-1">Trạng thái đích là khi một trong các bình chứa chính xác lượng này.</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 items-center">
+            <div class="md:col-span-1">
+                <label for="search-mode-select" class="block text-sm font-medium text-gray-700">Chọn Giải Thuật:</label>
+                <select id="search-mode-select" onchange="initializeBFS()" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                    <option value="BFS">Tìm kiếm theo Chiều rộng (BFS)</option>
+                    <option value="DFS">Tìm kiếm theo Chiều sâu (DFS)</option>
+                </select>
+            </div>
+            <div class="bg-blue-50 p-4 rounded-lg">
+                <p class="text-lg font-semibold text-blue-700">Bước Hiện Tại (Step)</p>
+                <p id="step-counter" class="text-3xl font-extrabold text-blue-900 mt-1">0</p>
+            </div>
+            <div class="bg-yellow-50 p-4 rounded-lg">
+                <p class="text-lg font-semibold text-yellow-700">Trạng Thái Đang Xét (X)</p>
+                <p id="current-state" class="text-3xl font-extrabold text-yellow-900 mt-1 current-tag w-fit">---</p>
+            </div>
+            <div class="bg-green-50 p-4 rounded-lg">
+                <p class="text-lg font-semibold text-green-700">Trạng Thái Đích?</p>
+                <p id="goal-status" class="text-2xl font-bold text-gray-800 mt-2">Đang tìm...</p>
+            </div>
+        </div>
+
+        <button id="next-step-btn" onclick="nextStep()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl transition duration-200 shadow-md">
+            Tiến Hành Bước Tiếp Theo
+        </button>
+
+        <!-- Container chính: Bảng duyệt (Trái) và Cây Trạng Thái (Phải) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            <!-- Cột Trái: Bảng Duyệt -->
+            <div>
+                <h2 class="text-xl font-bold text-gray-700 mb-3">Bảng Theo Dõi Trạng Thái</h2>
+                <div class="h-[650px] overflow-y-auto rounded-lg border border-gray-300">
+                    <table id="trace-table">
+                        <thead>
+                            <tr>
+                                <th class="w-16 sticky top-0 bg-gray-100 z-10">Bước</th>
+                                <th class="w-16 sticky top-0 bg-gray-100 z-10">X</th>
+                                <th class="sticky top-0 bg-gray-100 z-10">OPEN (Đang đợi duyệt)</th>
+                                <th class="sticky top-0 bg-gray-100 z-10">CLOSED (Đã duyệt)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trace-table-body">
+                            <!-- Trace steps will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Cột Phải: Cây Trạng Thái -->
+            <div>
+                <h2 class="text-xl font-bold text-gray-700 mb-3">Cây Trạng Thái (Vis.js)</h2>
+                <div id="network-visualization"></div>
+            </div>
+        </div>
+
+        <div class="mt-8">
+            <h2 class="text-xl font-bold text-gray-700 mb-3">Đường Đi Lời Giải</h2>
+            <div id="solution-path" class="p-4 bg-gray-100 rounded-lg text-lg font-mono whitespace-pre-wrap">Chưa tìm thấy đường đi.</div>
+        </div>
+        
+    </div>
+
+    <script>
+        // Global constants (Capacities are fixed)
+        const CAPACITIES = [7, 5, 3]; // [C7L, C5L, C3L]
+        
+        // Dynamic variables initialized in initializeBFS()
+        let queue = []; // OPEN list (Stack/Queue)
+        let visited = new Set(); // CLOSED list (for quick check)
+        let step = 0;
+        let parentMap = {}; // To reconstruct the path: {stateKey: {parentKey, action, level}}
+        let isGoalFound = false;
+        let traceHistory = []; // Lịch sử các bước duyệt cho bảng
+        
+        let searchMode = 'BFS'; // Mặc định là BFS
+        let CURRENT_GOAL_AMOUNT = 1; // Lượng dầu đích hiện tại
+        
+        // Vis.js Network variables
+        let nodes = null;
+        let edges = null;
+        let network = null;
+        
+        // --- Utility Functions ---
+
+        /** Chuyển trạng thái array [x, y, z] thành string "(x, y, z)" - Dùng làm ID của node */
+        const stateToString = (state) => `(${state[0]}, ${state[1]}, ${state[2]})`;
+        
+        /** Kiểm tra nếu trạng thái là trạng thái đích (có X lít dầu) */
+        const isGoal = (state) => state.includes(CURRENT_GOAL_AMOUNT);
+
+        /** Lấy trạng thái mới sau khi rót dầu theo quy tắc đong đầy/rỗng */
+        const getNextState = (current, fromIndex, toIndex) => {
+            const amounts = [...current];
+            const capacities = CAPACITIES;
+
+            const fromAmount = amounts[fromIndex];
+            const toCapacity = capacities[toIndex];
+            const toAmount = amounts[toIndex];
+            
+            // Không rót được nếu bình A rỗng hoặc bình B đã đầy
+            if (fromAmount === 0 || toAmount === toCapacity) {
+                return null;
+            }
+
+            // Số chỗ trống trong bình B
+            const emptySpaceInTo = toCapacity - toAmount;
+            
+            // Số lượng có thể rót: Min(Số dầu trong bình A, Số chỗ trống trong bình B)
+            const pourAmount = Math.min(fromAmount, emptySpaceInTo);
+
+            const newState = [...amounts];
+            newState[fromIndex] -= pourAmount;
+            newState[toIndex] += pourAmount;
+            
+            // Nếu trạng thái mới không đổi
+            if (stateToString(newState) === stateToString(current)) {
+                return null;
+            }
+
+            return newState;
+        };
+
+        
+        // Hàm chuyển đổi chỉ số (0, 1, 2) thành tên bình (x, y, z)
+        const getJugName = (index) => ['x', 'y', 'z'][index];
+
+        // Hàm chuyển đổi chỉ số thành ký hiệu hành động
+        const getActionName = (from, to) => `D${getJugName(from)}${getJugName(to)}`;
+
+        // --- Vis.js Network Functions ---
+
+        /** Cập nhật giao diện đồ thị */
+        function renderNetwork(currentStateKey = null) {
+            const container = document.getElementById('network-visualization');
+            
+            const options = {
+                layout: {
+                    hierarchical: {
+                        direction: "UD", // Từ trên xuống dưới (Up-Down)
+                        sortMethod: "directed",
+                        levelSeparation: 80,
+                        nodeSpacing: 150
+                    }
+                },
+                edges: {
+                    arrows: 'to',
+                    color: { inherit: true },
+                    smooth: {
+                        type: 'cubicBezier',
+                        forceDirection: 'vertical'
+                    }
+                },
+                nodes: {
+                    shape: 'box',
+                    font: {
+                        size: 14,
+                        color: '#333333'
+                    },
+                    margin: 10
+                },
+                interaction: {
+                    dragNodes: false,
+                    zoomView: true
+                }
+            };
+
+            const data = { nodes: nodes, edges: edges };
+            
+            const nodeIds = nodes.getIds();
+            const updates = [];
+            const queueKeys = queue.map(stateToString);
+
+            nodeIds.forEach(id => {
+                const stateKey = id; 
+                const update = { id: id };
+                
+                update.font = { color: '#333333' };
+                update.color = { background: '#f3f4f6', border: '#9ca3af' };
+                update.borderWidth = 1;
+
+                if (isGoalFound && stateKey === currentStateKey) {
+                    update.color = { background: '#fef3c7', border: '#f59e0b' }; // Goal found
+                    update.font.color = '#b45309';
+                    update.borderWidth = 3;
+                } else if (stateKey === currentStateKey) {
+                    update.color = { background: '#eff6ff', border: '#3b82f6' }; // Current
+                    update.font.color = '#1e40af';
+                    update.borderWidth = 2;
+                } else if (queueKeys.includes(stateKey)) {
+                    update.color = { background: '#d1fae5', border: '#34d399' }; // Open
+                } else if (visited.has(stateKey)) {
+                    update.color = { background: '#fee2e2', border: '#f87171' }; // Closed
+                }
+                
+                updates.push(update);
+            });
+            
+            nodes.update(updates);
+            
+            if (!network) {
+                network = new vis.Network(container, data, options);
+            } else {
+                network.setData(data);
+            }
+        }
+
+        /** Hàm cập nhật bảng theo dõi (Trace Table) */
+        function renderTraceTable() {
+            const tbody = document.getElementById('trace-table-body');
+            tbody.innerHTML = ''; // Xóa nội dung cũ
+            
+            traceHistory.forEach((trace, index) => {
+                const row = tbody.insertRow();
+                
+                // Cột 1: Bước
+                const cellStep = row.insertCell();
+                cellStep.textContent = index + 1;
+                cellStep.classList.add('font-semibold', 'text-center');
+
+                // Cột 2: X (Trạng thái đang xét)
+                const cellX = row.insertCell();
+                cellX.textContent = trace.currentStateKey;
+                cellX.classList.add('font-mono', 'font-bold');
+                
+                // Cột 3: OPEN
+                const cellOpen = row.insertCell();
+                cellOpen.innerHTML = trace.openList.map(key => {
+                     // Đánh dấu trạng thái mới được sinh ra trong bước này
+                     const isNew = trace.newStates.includes(key);
+                     const tagClass = isNew ? 'font-bold bg-yellow-100 text-yellow-800 border-yellow-400' : 'open-tag';
+                     return `<span class="state-tag ${tagClass}">${key}</span>`;
+                }).join('');
+                
+                // Cột 4: CLOSED
+                const cellClosed = row.insertCell();
+                cellClosed.innerHTML = trace.closedList.map(key => 
+                    `<span class="state-tag closed-tag">${key}</span>`
+                ).join('');
+                
+                // Highlight hàng hiện tại
+                if (index === traceHistory.length - 1) {
+                    row.classList.add('bg-blue-50', 'border-blue-400', 'border-2');
+                }
+            });
+
+            // Tự động cuộn xuống cuối bảng
+            const tableContainer = tbody.parentElement.parentElement;
+            tableContainer.scrollTop = tableContainer.scrollHeight;
+        }
+
+        /** Hàm khởi tạo BFS/DFS */
+        function initializeBFS() {
+            // --- 1. Lấy và Xác định Cấu hình Động ---
+            searchMode = document.getElementById('search-mode-select').value;
+            
+            const startX = Math.min(CAPACITIES[0], parseInt(document.getElementById('start-x').value) || 0);
+            const startY = Math.min(CAPACITIES[1], parseInt(document.getElementById('start-y').value) || 0);
+            const startZ = Math.min(CAPACITIES[2], parseInt(document.getElementById('start-z').value) || 0);
+            
+            // Đảm bảo không vượt quá dung tích
+            document.getElementById('start-x').value = startX;
+            document.getElementById('start-y').value = startY;
+            document.getElementById('start-z').value = startZ;
+
+            CURRENT_GOAL_AMOUNT = Math.min(CAPACITIES[0], parseInt(document.getElementById('goal-amount').value) || 1);
+            document.getElementById('goal-amount').value = CURRENT_GOAL_AMOUNT;
+
+            const dynamicStartState = [startX, startY, startZ];
+            const startStateKey = stateToString(dynamicStartState);
+
+            // --- 2. Khởi tạo lại các biến trạng thái ---
+            queue = [dynamicStartState];
+            visited = new Set();
+            parentMap = {};
+            step = 0;
+            isGoalFound = false;
+            traceHistory = [];
+            
+            nodes = new vis.DataSet();
+            edges = new vis.DataSet();
+            
+            // --- 3. Thiết lập Nút Khởi đầu ---
+            nodes.add({ id: startStateKey, label: startStateKey, level: 0 }); // Dùng stateKey làm ID
+            parentMap[startStateKey] = { parentKey: null, action: null, level: 0 };
+            
+            // Ghi nhận bước 0 (trạng thái khởi tạo)
+            traceHistory.push({
+                currentStateKey: startStateKey,
+                openList: [startStateKey], // Queue ban đầu
+                closedList: [],
+                newStates: []
+            });
+
+            // --- 4. Cập nhật Giao diện ---
+            document.getElementById('step-counter').textContent = step;
+            document.getElementById('current-state').textContent = startStateKey;
+            document.getElementById('current-state').classList.remove('goal-tag', 'current-tag', 'closed-tag');
+            document.getElementById('current-state').classList.add('open-tag'); // Trạng thái đầu tiên là Open
+            
+            document.getElementById('goal-status').classList.remove('text-green-600', 'font-extrabold', 'text-red-600');
+            document.getElementById('goal-status').classList.add('text-gray-800');
+            document.getElementById('goal-status').textContent = `Đang tìm (${CURRENT_GOAL_AMOUNT} Lít)...`;
+            document.getElementById('solution-path').textContent = "Chưa tìm thấy đường đi.";
+            
+            const nextBtn = document.getElementById('next-step-btn');
+            nextBtn.disabled = false;
+            nextBtn.textContent = `Tiến Hành Bước Tiếp Theo (${searchMode})`;
+            nextBtn.classList.remove('disabled:opacity-50');
+
+            // Render initial state
+            renderTraceTable();
+            renderNetwork(null);
+        }
+        
+        // --- BFS/DFS Core Logic ---
+
+        function nextStep() {
+            const nextBtn = document.getElementById('next-step-btn');
+
+            // 1. Nếu đã tìm thấy đích, nút bấm sẽ hoạt động như Reset
+            if (isGoalFound) {
+                initializeBFS(); // Vẫn dùng initializeBFS để reset
+                return;
+            }
+
+            // 2. Nếu hàng đợi rỗng, kết thúc tìm kiếm
+            if (queue.length === 0) {
+                nextBtn.textContent = "Tìm kiếm Thất bại! (Nhấn để Reset)";
+                nextBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                nextBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+
+                document.getElementById('goal-status').classList.remove('text-gray-800');
+                document.getElementById('goal-status').classList.add('text-red-600', 'font-extrabold');
+                document.getElementById('goal-status').textContent = "Tìm kiếm thất bại! Đã duyệt hết các trạng thái khả thi.";
+                document.getElementById('solution-path').textContent = `Không tìm thấy đường đi nào bằng ${searchMode}.`;
+
+                renderTraceTable();
+                renderNetwork(null);
+                return;
+            }
+
+
+            step++;
+            document.getElementById('step-counter').textContent = step;
+            
+            // Lấy trạng thái hiện tại (Dequeue cho BFS, Pop cho DFS)
+            const currentState = (searchMode === 'BFS') ? queue.shift() : queue.pop();
+            const currentStateKey = stateToString(currentState);
+            
+            // Thêm trạng thái vừa được duyệt vào danh sách đã thăm (CLOSED)
+            visited.add(currentStateKey); 
+            
+            const parentInfo = parentMap[currentStateKey];
+            const currentLevel = parentInfo ? parentInfo.level : 0;
+            
+            document.getElementById('current-state').textContent = currentStateKey;
+            let newStatesGenerated = [];
+
+            // 3. Kiểm tra trạng thái đích
+            if (isGoal(currentState)) {
+                isGoalFound = true;
+                
+                nextBtn.textContent = "Đích Đã Tìm Thấy! (Nhấn để Reset)";
+                nextBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                nextBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+
+                document.getElementById('goal-status').classList.remove('text-gray-800', 'text-red-600');
+                document.getElementById('goal-status').classList.add('text-green-600', 'font-extrabold');
+                document.getElementById('goal-status').textContent = `ĐÍCH ĐƯỢC TÌM THẤY: ${currentStateKey}!`;
+                document.getElementById('current-state').classList.remove('current-tag', 'open-tag');
+                document.getElementById('current-state').classList.add('goal-tag');
+                
+                displaySolution(currentStateKey);
+
+                // Ghi nhận bước cuối cùng (chỉ cập nhật CLOSED)
+                 traceHistory.push({
+                    currentStateKey: currentStateKey,
+                    openList: queue.map(stateToString),
+                    closedList: Array.from(visited),
+                    newStates: []
+                });
+
+                renderTraceTable();
+                renderNetwork(currentStateKey);
+                return; // Kết thúc ngay sau khi tìm thấy đích
+            }
+            
+            // 4. Sinh ra các trạng thái kế tiếp (6 hành động rót dầu)
+            const jugIndices = [0, 1, 2];
+            
+            let children = [];
+
+            for (const from of jugIndices) {
+                for (const to of jugIndices) {
+                    if (from === to) continue;
+
+                    const nextState = getNextState(currentState, from, to);
+                    if (nextState) {
+                        const nextStateKey = stateToString(nextState);
+                        
+                        // Kiểm tra trạng thái mới chưa được duyệt và chưa từng được sinh ra trước đó
+                        if (!visited.has(nextStateKey) && !parentMap[nextStateKey]) {
+                            
+                            children.push(nextState); // Lưu tạm các trạng thái con
+                            newStatesGenerated.push(nextStateKey);
+                            
+                            // Cập nhật parentMap và tạo node
+                            parentMap[nextStateKey] = {
+                                parentKey: currentStateKey,
+                                action: getActionName(from, to),
+                                level: currentLevel + 1 
+                            };
+
+                            // Thêm nút mới vào Vis.js. ID chính là stateKey
+                            nodes.add({ 
+                                id: nextStateKey, 
+                                label: nextStateKey, 
+                                level: currentLevel + 1 
+                            });
+
+                            // Thêm cạnh mới vào Vis.js
+                            edges.add({ 
+                                from: currentStateKey, 
+                                to: nextStateKey, 
+                                label: getActionName(from, to),
+                                font: { align: 'top' }
+                            });
+                        }
+                    }
+                }
+            }
+
+            // 5. Thêm các trạng thái con vào queue/stack:
+            if (searchMode === 'BFS') {
+                // FIFO (Queue): Thêm vào cuối (thứ tự sinh ra)
+                queue.push(...children);
+            } else {
+                // LIFO (Stack/DFS): Nút nào vào sau (sinh ra sau) sẽ được pop ra trước.
+                queue.push(...children);
+            }
+
+            
+            // 6. Ghi lại lịch sử duyệt
+            traceHistory.push({
+                currentStateKey: currentStateKey,
+                openList: queue.map(stateToString),
+                closedList: Array.from(visited),
+                newStates: newStatesGenerated
+            });
+
+            // 7. Cập nhật giao diện
+            renderTraceTable();
+            renderNetwork(currentStateKey);
+        }
+
+        // --- Visualization Functions ---
+
+        /** Truy vết ngược từ trạng thái đích đến trạng thái đầu */
+        function displaySolution(goalStateKey) {
+            let path = [];
+            let currentKey = goalStateKey;
+            
+            // Lấy trạng thái bắt đầu thực tế đã được dùng trong bước 0
+            const startStateKey = traceHistory[0].currentStateKey;
+
+            while (currentKey && currentKey !== startStateKey) {
+                const info = parentMap[currentKey];
+                if (info) {
+                    path.push({ state: currentKey, action: info.action });
+                    currentKey = info.parentKey;
+                } else {
+                    break; 
+                }
+            }
+            
+            path.push({ state: startStateKey, action: 'Trạng thái Đầu' });
+            path.reverse(); // Đảo ngược để có thứ tự đúng
+
+            let solutionText = `**Giải thuật:** ${searchMode}\n**Trạng thái Đầu:** ${startStateKey}\n\n`;
+            path.forEach((item, index) => {
+                if (index > 0) {
+                    const previousState = path[index - 1].state;
+                    const action = item.action;
+                    solutionText += `\n${index}. **Hành động ${index}**: ${action} (${previousState} → ${item.state})\n`;
+                }
+            });
+
+            solutionText += `\n**Đích:** ${goalStateKey}`;
+
+            document.getElementById('solution-path').textContent = solutionText;
+        }
+        
+        // Khởi tạo ứng dụng khi trang web tải xong
+        window.onload = initializeBFS;
+
+    </script>
+</body>
+</html>
